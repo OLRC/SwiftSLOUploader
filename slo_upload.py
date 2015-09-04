@@ -4,6 +4,7 @@ import os
 import swiftclient
 import hashlib
 import json
+import time
 
 
 @click.command()
@@ -72,10 +73,10 @@ def init(filename, segment_size, container, auth_token, storage_url):
             segment.write(buf)
             segment.close()
 
-            # The location segments will be store don swift is within a pseudo
+            # The location segments will be stored on swift is within a pseudo
             # folder.
-            swift_destination = os.path.join(args["filename"] + "_segments",
-                                             segment_name)
+            swift_destination = os.path.join(
+                filename.split("/")[-1] + "_segments", segment_name)
 
             # Create manifest entry
             manifest.append(create_manifest_entry(segment_name,
@@ -96,9 +97,29 @@ def init(filename, segment_size, container, auth_token, storage_url):
 
     # Upload manifest file
     with open('tempmanifest.json', 'r') as outfile:
-        swiftclient.client.put_object(storage_url, auth_token, container,
-                                      filename, outfile,
-                                      query_string="multipart-manifest=put")
+
+        # Filename is the local path to the file. The manifest needs to be
+        # the name of the file.
+        filename = filename.split("/")[-1]
+
+        # Potentially not all the Processes are complete. This loop and sleep
+        # exponentially waits up to 8 times to allow the processes to catch up.
+        max_attempts = 9
+        for x in range(max_attempts):
+            try:
+                swiftclient.client.put_object(
+                    storage_url, auth_token, container, filename, outfile,
+                    query_string="multipart-manifest=put")
+                click.echo(
+                    "Upload successful!")
+                break
+            except:
+                if x == max_attempts - 1:
+                    click.echo(
+                        "Upload failed. Manifest could not be uploaded.")
+                time.sleep(2 ** x)
+                pass
+
         outfile.close()
 
     delete_file('tempmanifest.json')
