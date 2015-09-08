@@ -14,25 +14,15 @@ import time
               'megabytes. Default and minimum is 1MB')
 @click.option('--container', help='Container to place the file.',
               required=True)
-@click.option('--auth_token', help='Swift auth token from swift stat.',
-              required=True)
-@click.option('--storage_url', help='Storage url found from swift stat -v.',
-              required=True)
+@click.option('--auth_token', help='Swift auth token from swift stat.')
+@click.option('--storage_url', help='Storage url found from swift stat -v.')
 def init(filename, segment_size, container, auth_token, storage_url):
     """Given the swift credentials, upload the targeted file onto swift as a
     Static Large Object"""
 
-    # Validate auth info
-    try:
-        swiftclient.client.head_container(storage_url, auth_token, container)
-    except:
-        click.echo("Invalid authentication information. Check that your"
-                   " storage_url is correct or do a swift stat to get a new"
-                   " auth token")
-        return
-
-    # Counter for segments created.
-    segment_counter = 1
+    # Check credentials
+    (auth_token, storage_url) = validate_credentials(storage_url, auth_token,
+                                                     container)
 
     # Variables required by several functions wrapped in a dictionary for
     # convenience.
@@ -44,8 +34,9 @@ def init(filename, segment_size, container, auth_token, storage_url):
         "storage_url": storage_url
     }
 
-    manifest = []
-
+    manifest = []  # Holds manifests entries to be written to file afterwards.
+    segment_counter = 1  # Counter for segments created.
+    # This count makes sure we do not exceed 10 segments at a time.
     initial_file_count = len([name for name in os.listdir('.')])
 
     with open(filename, "rt") as f:
@@ -93,7 +84,7 @@ def init(filename, segment_size, container, auth_token, storage_url):
     # Create manifest file
     with open('tempmanifest.json', 'w') as outfile:
         json.dump(manifest, outfile)
-        outfile.close()
+    outfile.close()
 
     # Upload manifest file
     with open('tempmanifest.json', 'r') as outfile:
@@ -113,16 +104,68 @@ def init(filename, segment_size, container, auth_token, storage_url):
                 click.echo(
                     "Upload successful!")
                 break
-            except:
+            except Exception, e:
+                print(e)
                 if x == max_attempts - 1:
                     click.echo(
                         "Upload failed. Manifest could not be uploaded.")
+                    break
                 time.sleep(2 ** x)
                 pass
 
-        outfile.close()
+    outfile.close()
 
     delete_file('tempmanifest.json')
+
+
+def validate_credentials(storage_url, auth_token, container):
+    '''Validate credentials. Check to make sure auth token and storage url
+    work for the given tenant. If they are not set, check that the required
+    os variables are set and that the work. Return valid auth token and storage
+    url. Exit program if credentials are invalid or os variables not set.'''
+
+    # Check given credentials
+    if not (storage_url or auth_token):
+
+        # Check OS variables
+        if (not os.environ.get("OS_AUTH_URL") or
+                not os.environ.get("OS_USERNAME") or
+                not os.environ.get("OS_PASSWORD") or
+                not os.environ.get("OS_TENANT_NAME")):
+
+            # Exit if variables are not set.
+            click.echo("Please pass in --storage_url and --auth_token or make"
+                       " sure $OS_USERNAME, $OS_PASSWORD, $OS_TENANT_NAME,"
+                       " $OS_AUTH_URL are set in your environment variables.")
+            exit(0)
+        else:
+            try:
+                (storage_url, auth_token) = swiftclient.client.get_auth(
+                    os.environ.get("OS_AUTH_URL"),
+                    os.environ.get("OS_TENANT_NAME") + ":"
+                    + os.environ.get("OS_USERNAME"),
+                    os.environ.get("OS_PASSWORD"),
+                    auth_version=2)
+
+            except swiftclient.client.ClientException:
+                click.echo("Failed to authenticate. Please check that your"
+                           " environment variables $OS_USERNAME, $OS_PASSWORD,"
+                           " $OS_AUTH_URL and $OS_TENANT_NAME are correct."
+                           " Alternatively, pass in --storage_url and"
+                           " --auth_token.")
+                exit(0)
+
+    # Check credentials against the given container
+    try:
+        swiftclient.client.head_container(storage_url, auth_token,
+                                          container)
+    except:
+        click.echo("Invalid authentication information. Check that your"
+                   " storage_url is correct or do a swift stat to get a new"
+                   " auth token")
+        exit(0)
+
+    return (auth_token, storage_url)
 
 
 def process_segment(args, segment_name, swift_destination):
