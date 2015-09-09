@@ -44,9 +44,17 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url):
     max_processes = 10  # Maximum number of processes
 
     with open(filename, "r") as f:
+
+        # Check if upload_cache exists:
+        try:
+            open("upload_cache")
+            segment_counter = fast_forward_file(f, segment_size)
+            f.seek(segment_size * 1048576 * (segment_counter - 1))
+        except IOError:
+            pass
         while True:
 
-            while len(processes) > max_processes:
+            while len(processes) >= max_processes:
                 p = processes.pop()
                 p.join()
 
@@ -90,6 +98,29 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url):
 
     delete_file("upload_cache")
     delete_file("manifest.json")
+
+
+def fast_forward_file(file, segment_size):
+    '''Find the last sequential segment name from upload_cache. Fast forward
+    the given file to the corresponding position for the next segment. Return
+    the next segment number.'''
+
+    segments = []
+
+    cache = open('upload_cache', "r")
+    for line in cache:
+        segments.append(int(line.split(":")[0]))
+
+    segments.sort()
+
+    i = 1
+
+    while i < len(segments):
+        if segments[i - 1] != segments[i] - 1:
+            return segments[i - 1] + 1
+        i += 1
+
+    return segments[-1] + 1
 
 
 def validate_credentials(storage_url, auth_token, container):
