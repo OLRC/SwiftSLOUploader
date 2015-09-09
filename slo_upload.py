@@ -42,13 +42,11 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url):
     segment_counter = 1  # Counter for segments created.
 
     max_processes = 10  # Maximum number of processes
-    # This count makes sure we do not exceed 10 segments at a time.
-    initial_file_count = len([name for name in os.listdir('.')])
 
     with open(filename, "r") as f:
         while True:
 
-            while len(processes) > 10:
+            while len(processes) > max_processes:
                 p = processes.pop()
                 p.join()
 
@@ -152,6 +150,8 @@ def process_segment(args, segment_name, swift_destination):
     log_segment(segment_name, swift_destination, args)
 
     delete_file(segment_name)
+
+    exit(0)
 
 
 def upload_segment(source, target, args):
