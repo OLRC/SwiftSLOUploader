@@ -1,5 +1,5 @@
 import click
-from multiprocessing import Process
+from multiprocessing import Process, Lock
 import os
 import swiftclient
 import hashlib
@@ -16,13 +16,15 @@ import time
               required=True)
 @click.option('--auth_token', help='Swift auth token from swift stat.')
 @click.option('--storage_url', help='Storage url found from swift stat -v.')
-def init(filename, segment_size, container, auth_token, storage_url):
+def slo_upload(filename, segment_size, container, auth_token, storage_url):
     """Given the swift credentials, upload the targeted file onto swift as a
     Static Large Object"""
 
     # Check credentials
     (auth_token, storage_url) = validate_credentials(storage_url, auth_token,
                                                      container)
+
+    #TODO: Check for existing tempmanifest.json
 
     # Variables required by several functions wrapped in a dictionary for
     # convenience.
@@ -31,24 +33,24 @@ def init(filename, segment_size, container, auth_token, storage_url):
         "segment_size": segment_size,
         "container": container,
         "auth_token": auth_token,
-        "storage_url": storage_url
+        "storage_url": storage_url,
+        "lock": Lock(),
     }
 
-    manifest = []  # Holds manifests entries to be written to file afterwards.
+    processes = []  # Holder for processes
+
     segment_counter = 1  # Counter for segments created.
+
+    max_processes = 10  # Maximum number of processes
     # This count makes sure we do not exceed 10 segments at a time.
     initial_file_count = len([name for name in os.listdir('.')])
 
-    with open(filename, "rt") as f:
+    with open(filename, "r") as f:
         while True:
 
-            # We do not want to create more faster too much faster than we can
-            # upload and delete them. Keep looping until the number of
-            # segments yet to be processed is less than 10
-            outstanding_segments = len(
-                [name for name in os.listdir('.')]) - initial_file_count
-            if outstanding_segments > 10:
-                continue
+            while len(processes) > 10:
+                p = processes.pop()
+                p.join()
 
             buf = f.read(int(segment_size * 1048576))
             if not buf:
@@ -60,7 +62,7 @@ def init(filename, segment_size, container, auth_token, storage_url):
             )
 
             # Create file
-            segment = open(segment_name, "wt")
+            segment = open(segment_name, "w")
             segment.write(buf)
             segment.close()
 
@@ -69,53 +71,27 @@ def init(filename, segment_size, container, auth_token, storage_url):
             swift_destination = os.path.join(
                 filename.split("/")[-1] + "_segments", segment_name)
 
-            # Create manifest entry
-            manifest.append(create_manifest_entry(segment_name,
-                            os.path.join(container, swift_destination)))
-
             # Upload and delete the segment.
             p = Process(target=process_segment,
                         args=(args, segment_name, swift_destination))
             p.start()
+            processes = [p] + processes
 
-            # Update manifest
             segment_counter += 1
+    f.close()
+
+    while len(processes) > 0:
+        p = processes.pop()
+        p.join()
 
     # Create manifest file
-    with open('tempmanifest.json', 'w') as outfile:
-        json.dump(manifest, outfile)
-    outfile.close()
+    create_manifest_file("manifest.json", container)
 
     # Upload manifest file
-    with open('tempmanifest.json', 'r') as outfile:
+    upload_manifest_file("manifest.json", args)
 
-        # Filename is the local path to the file. The manifest needs to be
-        # the name of the file.
-        filename = filename.split("/")[-1]
-
-        # Potentially not all the Processes are complete. This loop and sleep
-        # exponentially waits up to 8 times to allow the processes to catch up.
-        max_attempts = 9
-        for x in range(max_attempts):
-            try:
-                swiftclient.client.put_object(
-                    storage_url, auth_token, container, filename, outfile,
-                    query_string="multipart-manifest=put")
-                click.echo(
-                    "Upload successful!")
-                break
-            except Exception, e:
-                print(e)
-                if x == max_attempts - 1:
-                    click.echo(
-                        "Upload failed. Manifest could not be uploaded.")
-                    break
-                time.sleep(2 ** x)
-                pass
-
-    outfile.close()
-
-    delete_file('tempmanifest.json')
+    delete_file("upload_cache")
+    delete_file("manifest.json")
 
 
 def validate_credentials(storage_url, auth_token, container):
@@ -173,6 +149,8 @@ def process_segment(args, segment_name, swift_destination):
 
     upload_segment(segment_name, swift_destination, args)
 
+    log_segment(segment_name, swift_destination, args)
+
     delete_file(segment_name)
 
 
@@ -185,23 +163,81 @@ def upload_segment(source, target, args):
                                   opened_source_file)
 
 
+def log_segment(segment_name, swift_destination, args):
+    '''Write to the upload_cache the segment that was uploaded with it's
+    swift_destination'''
+
+    args["lock"].acquire()
+    open('upload_cache', 'a').write(
+        "{0}:{1}:{2}:{3}\n".format(
+            segment_name, swift_destination, md5Checksum(segment_name),
+            os.stat(segment_name).st_size))
+    args["lock"].release()
+
+
+def create_manifest_file(filename, container):
+    '''From the upload cache, create the manifest file.'''
+
+    manifest = []
+
+    # Create a manifest file for writing.
+    with open(filename, 'w') as outfile:
+
+        # Read lines from upload_cache
+        cache = open('upload_cache', "r")
+        for line in cache:
+            manifest.append(create_manifest_entry(line, container))
+
+        manifest = sorted(manifest, key=lambda k: k['name'])
+
+        # We sort by name but the manifest json entries do not have name in
+        # them.
+        for entry in manifest:
+            del entry["name"]
+        json.dump(manifest, outfile)
+
+
+def create_manifest_entry(line, container):
+    '''Create and return a dictionary with the necessary manifest
+    variables for the given segment.'''
+
+    parts = line.split(":")
+
+    return {
+        "name": parts[0],
+        "path": os.path.join(container, parts[1]),
+        "etag": parts[2],
+        "size_bytes": parts[3]
+    }
+
+
+def upload_manifest_file(manifest_name, args):
+    '''Open the given file and upload it. If the upload fails, attempt to
+    reupload it up to 9 times with exponential waits in between attempts.'''
+
+    with open(manifest_name, 'r') as outfile:
+
+        # Filename is the local path to the file. The manifest needs to be
+        # the name of the file.
+        filename = args["filename"].split("/")[-1]
+
+        try:
+            swiftclient.client.put_object(
+                args["storage_url"], args["auth_token"], args["container"],
+                filename, outfile,
+                query_string="multipart-manifest=put")
+            click.echo(
+                "Upload successful!")
+        except Exception, e:
+            print(e)
+            click.echo(
+                "Upload failed. Manifest could not be uploaded.")
+    outfile.close()
+
+
 def delete_file(filename):
     '''Delete the given file.'''
     os.remove(filename)
-
-
-def create_manifest_entry(segment_name, swift_destination):
-    '''Create a dictionary with the necessary manifest
-    variables for the given segment.'''
-
-    size = os.stat(segment_name).st_size
-    etag = md5Checksum(segment_name)
-
-    return {
-        "path": swift_destination,
-        "etag": etag,
-        "size_bytes": size
-    }
 
 
 def md5Checksum(filePath):
@@ -216,4 +252,4 @@ def md5Checksum(filePath):
 
 
 if __name__ == '__main__':
-    init()
+    slo_upload()
