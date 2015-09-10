@@ -43,6 +43,8 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url):
 
     max_processes = 10  # Maximum number of processes
 
+    file_size = os.stat(filename).st_size
+
     with open(filename, "r") as f:
 
         # Check if upload_cache exists:
@@ -54,22 +56,26 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url):
             pass
         while True:
 
+            # Stop loop when entire file is read.
+            if f.tell() == file_size:
+                break
+
+            # Control the maximum number of processes are active.
+            # This also restricts how much space is used up for segments.
             while len(processes) >= max_processes:
                 p = processes.pop()
                 p.join()
 
-            buf = f.read(int(segment_size * 1048576))
-            if not buf:
-                 # we've read the entire file in, so we're done.
-                break
+            segment_name = "{}".format("%08d" % segment_counter)
 
-            segment_name = "{}".format(
-                "%08d" % segment_counter
-            )
-
-            # Create file
+            # Create segment
             segment = open(segment_name, "w")
-            segment.write(buf)
+
+            # We want to read a maximum of 1MB at a time
+            read_increment = 1048576
+            for i in range(0, int(segment_size * 1048576), read_increment):
+                buf = f.read(read_increment)
+                segment.write(buf)
             segment.close()
 
             # The location segments will be stored on swift is within a pseudo
