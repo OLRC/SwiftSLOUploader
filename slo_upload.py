@@ -7,6 +7,7 @@ import json
 import time
 import math
 
+
 @click.command()
 @click.option('--filename', help='File to be uploaded.', required=True)
 @click.option('--segment_size', default=1,
@@ -32,11 +33,6 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     (file_size, total_segments, segment_size) = check_segment_size(
         filename, segment_size)
 
-    # Prompt user to proceed with modified arguments
-    # segment size
-    # processes used
-    # space required
-
     # Variables required by several functions wrapped in a dictionary for
     # convenience.
     args = {
@@ -46,12 +42,17 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
         "auth_token": auth_token,
         "storage_url": storage_url,
         "lock": Lock(),
+        "total_segments": total_segments,
+        "segment_size": segment_size,
+        "concurrent_processes": concurrent_processes
     }
+
+    # Prompt user to proceed with modified arguments
+    get_user_confirmation(args)
 
     processes = []  # Holder for processes
 
     segment_counter = 1  # Counter for segments created.
-
 
     with open(filename, "r") as f:
 
@@ -62,6 +63,7 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
             f.seek(segment_size * 1048576 * (segment_counter - 1))
         except IOError:
             pass
+        # with progressbar(length=total_segments)
         while True:
 
             # Stop loop when entire file is read.
@@ -113,6 +115,27 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     delete_file("upload_cache")
     delete_file("manifest.json")
 
+
+def get_user_confirmation(args):
+    '''Prompt user with current variables and prompt the user with confirmation
+    to continue. Otherwise exit.'''
+
+    click.echo("Please confirm the following will be excuted:")
+    click.echo("       segments created: {0}".format(args["total_segments"]))
+    click.echo("          segments size: {0}MB".format(args["segment_size"]))
+    click.echo("   concurrent processes: {0}".format(
+        args["concurrent_processes"]))
+    click.echo("        disk space used: {0}MB".format(
+        args["segment_size"] * args["concurrent_processes"]))
+    confirmation = click.prompt("Do you wish to proceed? Enter yes or no")
+    while not (confirmation == "no" or confirmation == "yes"):
+        confirmation = click.prompt("Do you wish to proceed? Enter yes or no")
+    if confirmation == "no":
+        click.echo("Exiting.")
+        exit(0)
+    click.echo("Starting up load ...")
+
+
 def check_segment_size(filename, segment_size):
     '''Check the given file can be segmented within less than or equal to 1000
      segments with the given segment_size. If not, find an appropriate
@@ -123,14 +146,14 @@ def check_segment_size(filename, segment_size):
     total_segments = int(math.ceil(
         float(file_size) / float(segment_size * 1048576)))
     if total_segments > 1000:
-        click.echo("Unable to use {0} as segment_size due to 1000 segment"
+        click.echo("Unable to use {0}MB as segment_size due to 1000 segment"
                    " limit.".format(segment_size))
-        segment_size = int(math.ceil(float(file_size)/1000.0) / 1048576.0)
+        segment_size_bytes = float(math.ceil(file_size/1000.0))
+        segment_size = int(math.ceil(segment_size_bytes / 1048576.0))
         total_segments = int(math.ceil(
             float(file_size) / float(segment_size * 1048576)))
 
     return (file_size, total_segments, segment_size)
-
 
 
 def fast_forward_file(file, segment_size):
