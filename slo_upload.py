@@ -52,6 +52,10 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     # Prompt user to proceed with modified arguments
     get_user_confirmation(args)
 
+    # Create segments container
+    args["segment_container"] = create_container(
+        args, container + "_segments")
+
     # Create and upload the segments
     create_segments(args)
 
@@ -66,6 +70,15 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
 
     delete_file("upload_cache")
     delete_file("manifest.json")
+
+
+def create_container(args, container_name):
+    '''Create the given container name. Return the name of the container
+    created.'''
+
+    swiftclient.client.put_container(args["storage_url"], args["auth_token"],
+                                     container_name)
+    return container_name
 
 
 def create_segments(args):
@@ -263,7 +276,7 @@ def upload_segment(source, target, args):
 
     opened_source_file = open(source, 'r')
     swiftclient.client.put_object(args["storage_url"], args["auth_token"],
-                                  args["container"], target,
+                                  args["segment_container"], target,
                                   opened_source_file)
 
 
