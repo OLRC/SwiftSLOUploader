@@ -5,7 +5,7 @@ import swiftclient
 import hashlib
 import json
 import time
-
+import math
 
 @click.command()
 @click.option('--filename', help='File to be uploaded.', required=True)
@@ -28,7 +28,14 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     (auth_token, storage_url) = validate_credentials(storage_url, auth_token,
                                                      container)
 
-    #TODO: Check for existing tempmanifest.json
+    # Check args meet 1000 segment limit.
+    (file_size, total_segments, segment_size) = check_segment_size(
+        filename, segment_size)
+
+    # Prompt user to proceed with modified arguments
+    # segment size
+    # processes used
+    # space required
 
     # Variables required by several functions wrapped in a dictionary for
     # convenience.
@@ -45,7 +52,6 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
 
     segment_counter = 1  # Counter for segments created.
 
-    file_size = os.stat(filename).st_size
 
     with open(filename, "r") as f:
 
@@ -106,6 +112,25 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
 
     delete_file("upload_cache")
     delete_file("manifest.json")
+
+def check_segment_size(filename, segment_size):
+    '''Check the given file can be segmented within less than or equal to 1000
+     segments with the given segment_size. If not, find an appropriate
+     segment_size to meet this limit. Return file_size, total_segments and
+     segment_size.'''
+
+    file_size = os.stat(filename).st_size
+    total_segments = int(math.ceil(
+        float(file_size) / float(segment_size * 1048576)))
+    if total_segments > 1000:
+        click.echo("Unable to use {0} as segment_size due to 1000 segment"
+                   " limit.".format(segment_size))
+        segment_size = int(math.ceil(float(file_size)/1000.0) / 1048576.0)
+        total_segments = int(math.ceil(
+            float(file_size) / float(segment_size * 1048576)))
+
+    return (file_size, total_segments, segment_size)
+
 
 
 def fast_forward_file(file, segment_size):
