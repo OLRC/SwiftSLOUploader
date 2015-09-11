@@ -49,6 +49,7 @@ Options
  	$ --container TEXT        Container to place the file.  [required]
  	$ --auth_token TEXT       Swift auth token from swift stat.  [required]
  	$ --storage_url TEXT      Storage url found from swift stat -v.  [required]
+ 	$ --concurrent_processes  Number of concurrent processes used to upload segments.
  	$ --help                  Show this message and exit.
 
 

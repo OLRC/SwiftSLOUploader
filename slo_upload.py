@@ -16,7 +16,11 @@ import time
               required=True)
 @click.option('--auth_token', help='Swift auth token from swift stat.')
 @click.option('--storage_url', help='Storage url found from swift stat -v.')
-def slo_upload(filename, segment_size, container, auth_token, storage_url):
+@click.option('--concurrent_processes', default=10,
+              help='Number of concurrent processes used to upload segments.'
+              ' Default is 10')
+def slo_upload(filename, segment_size, container, auth_token, storage_url,
+               concurrent_processes):
     """Given the swift credentials, upload the targeted file onto swift as a
     Static Large Object"""
 
@@ -41,8 +45,6 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url):
 
     segment_counter = 1  # Counter for segments created.
 
-    max_processes = 10  # Maximum number of processes
-
     file_size = os.stat(filename).st_size
 
     with open(filename, "r") as f:
@@ -62,7 +64,7 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url):
 
             # Control the maximum number of processes are active.
             # This also restricts how much space is used up for segments.
-            while len(processes) >= max_processes:
+            while len(processes) >= concurrent_processes:
                 p = processes.pop()
                 p.join()
 
