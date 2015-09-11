@@ -52,7 +52,7 @@ Options
  	$ --auth_token TEXT       Swift auth token from swift stat.  [required]
  	$ --storage_url TEXT      Storage url found from swift stat -v.  [required]
  	$ --concurrent_processes  Number of concurrent processes used to upload segments. Default is 10
- 	$ --max_disk_space        In MB, the max amount of disk space the script can use while creating segments.
+ 	$ --max_disk_space        In MB, the max amount of disk space the script can use while creating segments. By default, the script will use as much space as required as determined by the segment_size and concurrent_processes
  	$ --help                  Show this message and exit.
 
 

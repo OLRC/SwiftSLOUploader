@@ -20,8 +20,13 @@ import math
 @click.option('--concurrent_processes', default=10,
               help='Number of concurrent processes used to upload segments.'
               ' Default is 10')
+@click.option('--max_disk_space', default=0,
+              help='In MB, the max amount of disk space the script can use'
+              ' while creating segments. By default, the script will use as'
+              ' much space as required as determined by the segment_size and'
+              ' concurrent_processes')
 def slo_upload(filename, segment_size, container, auth_token, storage_url,
-               concurrent_processes):
+               concurrent_processes, max_disk_space):
     """Given the swift credentials, upload the targeted file onto swift as a
     Static Large Object"""
 
@@ -32,6 +37,10 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     # Check args meet 1000 segment limit.
     (file_size, total_segments, segment_size) = check_segment_size(
         filename, segment_size)
+
+    # Check args meet max_disk_space
+    concurrent_processes = update_concurrent_processes(
+        concurrent_processes, segment_size, max_disk_space)
 
     # Variables required by several functions wrapped in a dictionary for
     # convenience.
@@ -70,6 +79,33 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
 
     delete_file("upload_cache")
     delete_file("manifest.json")
+
+
+def update_concurrent_processes(concurrent_processes, segment_size,
+                                max_disk_space):
+    '''Given the number of processes to be run and the
+    segment_size, return the number of processes that can run without exceeding
+    the max_disk_space.'''
+
+    # Only need to make changes if max_disk_space defined.
+    if max_disk_space:
+        total_disk_space_used = concurrent_processes * segment_size * 1048576
+
+        if total_disk_space_used > max_disk_space * 1048576:
+            click.echo(
+                "Unable to use {0} as concurrent_processes due to {1} "
+                "max_disk_space limit".format(
+                    concurrent_processes, max_disk_space))
+            concurrent_processes = max_disk_space / (segment_size)
+
+    # Not possible to stay within minimum disk space
+    if not concurrent_processes:
+        click.echo(
+            "Unable to perform upload with {0}MB max_disk_space. "
+            "Minimum disk space required is {1}MB".format(
+                max_disk_space, segment_size))
+        concurrent_processes = 1
+    return concurrent_processes
 
 
 def create_container(args, container_name):
