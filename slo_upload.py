@@ -82,7 +82,7 @@ def create_segments(args):
             # Check if upload_cache exists:
             try:
                 open("upload_cache")
-                segment_counter = fast_forward_file(f, args["segment_size"])
+                segment_counter = update_segment_counter(args["segment_size"])
                 f.seek(args["segment_size"] * 1048576 * (segment_counter - 1))
                 bar.update(segment_counter)
             except IOError:
@@ -175,21 +175,19 @@ def check_segment_size(filename, segment_size):
     return (file_size, total_segments, segment_size)
 
 
-def fast_forward_file(file, segment_size):
-    '''Find the last sequential segment name from upload_cache. Fast forward
-    the given file to the corresponding position for the next segment. Return
-    the next segment number.'''
+def update_segment_counter(segment_size):
+    '''Find the last sequential segment name from upload_cache. Return
+    the next sequential segment number.'''
 
+    # Gather and sort segments
     segments = []
-
     cache = open('upload_cache', "r")
     for line in cache:
         segments.append(int(line.split(":")[0]))
-
     segments.sort()
 
+    # Find segment where the next segment is not sequential
     i = 1
-
     while i < len(segments):
         if segments[i - 1] != segments[i] - 1:
             return segments[i - 1] + 1
