@@ -44,67 +44,16 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
         "lock": Lock(),
         "total_segments": total_segments,
         "segment_size": segment_size,
+        "file_size": file_size,
         "concurrent_processes": concurrent_processes,
-        "processes": []  # Holder for processes
+        "processes": []  # Holder for processes,
     }
 
     # Prompt user to proceed with modified arguments
     get_user_confirmation(args)
 
-    segment_counter = 1  # Counter for segments created.
-
-    with open(filename, "r") as f:
-        # Progress bar for segments uploaded.
-        with click.progressbar(length=total_segments,
-                               label="Processing segments") as bar:
-
-            # Check if upload_cache exists:
-            try:
-                open("upload_cache")
-                segment_counter = fast_forward_file(f, segment_size)
-                f.seek(segment_size * 1048576 * (segment_counter - 1))
-                bar.update(segment_counter)
-            except IOError:
-                pass
-
-            while True:
-
-                # Stop loop when entire file is read.
-                if f.tell() == file_size:
-                    break
-
-                # Control the maximum number of processes are active.
-                # This also restricts how much space is used up for segments.
-                while len(args["processes"]) >= concurrent_processes:
-                    p = args["processes"].pop()
-                    p.join()
-
-                segment_name = "{}".format("%04d" % segment_counter)
-
-                # Create segment
-                segment = open(segment_name, "w")
-
-                # We want to read a maximum of 1MB at a time
-                read_increment = 1048576
-                for i in range(0, int(segment_size * 1048576), read_increment):
-                    buf = f.read(read_increment)
-                    segment.write(buf)
-                segment.close()
-
-                # The location segments will be stored on swift is within a
-                # pseudo folder.
-                swift_destination = os.path.join(
-                    filename.split("/")[-1] + "_segments", segment_name)
-
-                # Upload and delete the segment.
-                p = Process(target=process_segment,
-                            args=(args, segment_name, swift_destination))
-                p.start()
-                bar.update(1)
-                args["processes"] = [p] + args["processes"]
-
-                segment_counter += 1
-    f.close()
+    # Create and upload the segments
+    create_segments(args)
 
     # Wait for remaining uploads to finish.
     join_processes(args["processes"])
@@ -123,7 +72,59 @@ def create_segments(args):
     '''Create segments of the file and create processes to upload them, delete
     them and update the upload_cache file.'''
 
-    pass
+    segment_counter = 1  # Counter for segments created.
+
+    with open(args["filename"], "r") as f:
+        # Progress bar for segments uploaded.
+        with click.progressbar(length=args["total_segments"],
+                               label="Processing segments") as bar:
+
+            # Check if upload_cache exists:
+            try:
+                open("upload_cache")
+                segment_counter = fast_forward_file(f, args["segment_size"])
+                f.seek(args["segment_size"] * 1048576 * (segment_counter - 1))
+                bar.update(segment_counter)
+            except IOError:
+                pass
+
+            # Stop loop when entire file is read.
+            while not f.tell() == args["file_size"]:
+
+                # Control the maximum number of processes are active.
+                # This also restricts how much space is used up for segments.
+                while len(args["processes"]) >= args["concurrent_processes"]:
+                    p = args["processes"].pop()
+                    p.join()
+
+                segment_name = "{}".format("%04d" % segment_counter)
+
+                # Create segment
+                segment = open(segment_name, "w")
+
+                # We want to read a maximum of 1MB at a time
+                read_increment = 1048576
+                for i in range(0, int(args["segment_size"] * 1048576),
+                               read_increment):
+                    buf = f.read(read_increment)
+                    segment.write(buf)
+                segment.close()
+
+                # The location segments will be stored on swift is within a
+                # pseudo folder.
+                swift_destination = os.path.join(
+                    args["filename"].split("/")[-1] + "_segments",
+                    segment_name)
+
+                # Upload and delete the segment.
+                p = Process(target=process_segment,
+                            args=(args, segment_name, swift_destination))
+                p.start()
+                bar.update(1)
+                args["processes"] = [p] + args["processes"]
+
+                segment_counter += 1
+    f.close()
 
 
 def join_processes(processes):
