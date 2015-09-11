@@ -44,19 +44,18 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
         "lock": Lock(),
         "total_segments": total_segments,
         "segment_size": segment_size,
-        "concurrent_processes": concurrent_processes
+        "concurrent_processes": concurrent_processes,
+        "processes": []  # Holder for processes
     }
 
     # Prompt user to proceed with modified arguments
     get_user_confirmation(args)
 
-    processes = []  # Holder for processes
-
     segment_counter = 1  # Counter for segments created.
 
     with open(filename, "r") as f:
         # Progress bar for segments uploaded.
-        with click.progressbar(length=total_segments + 1,
+        with click.progressbar(length=total_segments,
                                label="Processing segments") as bar:
 
             # Check if upload_cache exists:
@@ -76,8 +75,8 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
 
                 # Control the maximum number of processes are active.
                 # This also restricts how much space is used up for segments.
-                while len(processes) >= concurrent_processes:
-                    p = processes.pop()
+                while len(args["processes"]) >= concurrent_processes:
+                    p = args["processes"].pop()
                     p.join()
 
                 segment_name = "{}".format("%04d" % segment_counter)
@@ -102,15 +101,13 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
                             args=(args, segment_name, swift_destination))
                 p.start()
                 bar.update(1)
-                processes = [p] + processes
+                args["processes"] = [p] + args["processes"]
 
                 segment_counter += 1
     f.close()
 
-    click.echo("Wrapping up remaining uploads...")
-    while len(processes) > 0:
-        p = processes.pop()
-        p.join()
+    # Wait for remaining uploads to finish.
+    join_processes(args["processes"])
 
     # Create manifest file
     create_manifest_file("manifest.json", container)
@@ -120,6 +117,21 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
 
     delete_file("upload_cache")
     delete_file("manifest.json")
+
+
+def create_segments(args):
+    '''Create segments of the file and create processes to upload them, delete
+    them and update the upload_cache file.'''
+
+    pass
+
+
+def join_processes(processes):
+    '''Join all the processes in the list of processes.'''
+    click.echo("Wrapping up remaining uploads...")
+    while len(processes) > 0:
+        p = processes.pop()
+        p.join()
 
 
 def get_user_confirmation(args):
