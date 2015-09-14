@@ -81,14 +81,14 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     join_processes(args["processes"])
 
     # Create manifest file
-    create_manifest_file("manifest.json", container)
+    create_manifest_file(
+        os.path.join(args["temp_directory"], "manifest.json"), args)
 
     # Upload manifest file
-    upload_manifest_file("manifest.json", args)
+    upload_manifest_file(
+        os.path.join(args["temp_directory"], "manifest.json"), args)
 
     delete_directory(temp_directory)
-    delete_file("upload_cache")
-    delete_file("manifest.json")
 
 
 def adjust_temp_directory(temp_directory):
@@ -150,7 +150,7 @@ def create_segments(args):
 
         # Check if upload_cache exists:
         try:
-            open("upload_cache")
+            open(os.path.join(args["temp_directory"], "upload_cache"))
             segment_counter = update_segment_counter(args["segment_size"])
             bar.update(segment_counter)
         except IOError:
@@ -241,7 +241,7 @@ def update_segment_counter(segment_size):
 
     # Gather and sort segments
     segments = []
-    cache = open('upload_cache', "r")
+    cache = open(os.path.join(args["temp_directory"], 'upload_cache'), "r")
     for line in cache:
         segments.append(int(line.split(":")[0]))
     segments.sort()
@@ -365,14 +365,14 @@ def log_segment(segment_name, swift_destination, args):
     segment_location = os.path.join(args["temp_directory"], segment_name)
 
     args["lock"].acquire()
-    open('upload_cache', 'a').write(
+    open(os.path.join(args["temp_directory"], 'upload_cache'), 'a').write(
         "{0}:{1}:{2}:{3}\n".format(
             segment_name, swift_destination, md5Checksum(segment_location),
             os.stat(segment_location).st_size))
     args["lock"].release()
 
 
-def create_manifest_file(filename, container):
+def create_manifest_file(filename, args):
     '''From the upload cache, create the manifest file.'''
 
     manifest = []
@@ -381,9 +381,9 @@ def create_manifest_file(filename, container):
     with open(filename, 'w') as outfile:
 
         # Read lines from upload_cache
-        cache = open('upload_cache', "r")
+        cache = open(os.path.join(args["temp_directory"], 'upload_cache'), "r")
         for line in cache:
-            manifest.append(create_manifest_entry(line, container))
+            manifest.append(create_manifest_entry(line, args["container"]))
 
         manifest = sorted(manifest, key=lambda k: k['name'])
 
