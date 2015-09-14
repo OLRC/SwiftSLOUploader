@@ -6,6 +6,7 @@ import hashlib
 import json
 import time
 import math
+import shutil
 
 
 @click.command()
@@ -25,8 +26,12 @@ import math
               ' while creating segments. By default, the script will use as'
               ' much space as required as determined by the segment_size and'
               ' concurrent_processes')
+@click.option('--temp_directory',
+              help='The directory used temporarily for the creation of'
+              ' segments. By default, a directory named temp is created.'
+              ' Warning: this directory will be deleted.')
 def slo_upload(filename, segment_size, container, auth_token, storage_url,
-               concurrent_processes, max_disk_space):
+               concurrent_processes, max_disk_space, temp_directory):
     """Given the swift credentials, upload the targeted file onto swift as a
     Static Large Object"""
 
@@ -42,6 +47,9 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     concurrent_processes = update_concurrent_processes(
         concurrent_processes, segment_size, max_disk_space)
 
+    # Adjust the temp directory
+    temp_directory = adjust_temp_directory(temp_directory)
+
     # Variables required by several functions wrapped in a dictionary for
     # convenience.
     args = {
@@ -55,7 +63,8 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
         "segment_size": segment_size,
         "file_size": file_size,
         "concurrent_processes": concurrent_processes,
-        "processes": []  # Holder for processes,
+        "processes": [],  # Holder for processes,
+        "temp_directory": temp_directory
     }
 
     # Prompt user to proceed with modified arguments
@@ -77,8 +86,20 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
     # Upload manifest file
     upload_manifest_file("manifest.json", args)
 
+    delete_directory(temp_directory)
     delete_file("upload_cache")
     delete_file("manifest.json")
+
+
+def adjust_temp_directory(temp_directory):
+    '''If the temp directory is not set, return the temp directory as temp.
+    If the temp directory is set, create return a path to temp within
+    temp_directory.'''
+
+    if not temp_directory:
+        temp_directory = ''
+
+    return os.path.join(temp_directory, 'temp')
 
 
 def update_concurrent_processes(concurrent_processes, segment_size,
@@ -137,6 +158,10 @@ def create_segments(args):
             except IOError:
                 pass
 
+            # Check for temp directory, create it if it doens't exist.
+            if not os.path.isdir(args["temp_directory"]):
+                os.makedirs(args["temp_directory"])
+
             # Stop loop when entire file is read.
             while not f.tell() == args["file_size"]:
 
@@ -149,7 +174,8 @@ def create_segments(args):
                 segment_name = "{}".format("%04d" % segment_counter)
 
                 # Create segment
-                segment = open(segment_name, "w")
+                segment = open(
+                    os.path.join(args["temp_directory"], segment_name), "w")
 
                 # We want to read a maximum of 1MB at a time
                 read_increment = 1048576
@@ -188,7 +214,7 @@ def get_user_confirmation(args):
     '''Prompt user with current variables and prompt the user with confirmation
     to continue. Otherwise exit.'''
 
-    click.echo("Please confirm the following will be excuted:")
+    click.echo("Please review the following before continuing:")
     click.echo("       segments created: {0}".format(args["total_segments"]))
     click.echo("          segments size: {0}MB".format(args["segment_size"]))
     click.echo("   concurrent processes: {0}".format(
@@ -234,6 +260,9 @@ def update_segment_counter(segment_size):
     for line in cache:
         segments.append(int(line.split(":")[0]))
     segments.sort()
+
+    if len(segments) == 0:
+        return 1
 
     # Find segment where the next segment is not sequential
     i = 1
@@ -298,11 +327,13 @@ def validate_credentials(storage_url, auth_token, container):
 def process_segment(args, segment_name, swift_destination):
     '''Given a segment_name, upload the segment and delete the file.'''
 
-    upload_segment(segment_name, swift_destination, args)
+    upload_segment(
+        os.path.join(
+            args["temp_directory"], segment_name), swift_destination, args)
 
     log_segment(segment_name, swift_destination, args)
 
-    delete_file(segment_name)
+    delete_file(os.path.join(args["temp_directory"], segment_name))
 
     exit(0)
 
@@ -320,11 +351,13 @@ def log_segment(segment_name, swift_destination, args):
     '''Write to the upload_cache the segment that was uploaded with it's
     swift_destination'''
 
+    segment_location = os.path.join(args["temp_directory"], segment_name)
+
     args["lock"].acquire()
     open('upload_cache', 'a').write(
         "{0}:{1}:{2}:{3}\n".format(
-            segment_name, swift_destination, md5Checksum(segment_name),
-            os.stat(segment_name).st_size))
+            segment_name, swift_destination, md5Checksum(segment_location),
+            os.stat(segment_location).st_size))
     args["lock"].release()
 
 
@@ -391,6 +424,11 @@ def upload_manifest_file(manifest_name, args):
 def delete_file(filename):
     '''Delete the given file.'''
     os.remove(filename)
+
+
+def delete_directory(directory):
+    '''Delete the given directory.'''
+    shutil.rmtree(directory)
 
 
 def md5Checksum(filePath):

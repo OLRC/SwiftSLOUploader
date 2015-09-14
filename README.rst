@@ -53,6 +53,7 @@ Options
  	$ --storage_url TEXT      Storage url found from swift stat -v.  [required]
  	$ --concurrent_processes  Number of concurrent processes used to upload segments. Default is 10
  	$ --max_disk_space        In MB, the max amount of disk space the script can use while creating segments. By default, the script will use as much space as required as determined by the segment_size and concurrent_processes
+ 	$ --max_disk_space        The directory used temporarily for the creation of segments. By default, a directory named temp is created. Warning: this directory will be deleted.
  	$ --help                  Show this message and exit.
 
 
