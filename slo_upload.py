@@ -67,6 +67,10 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
         "temp_directory": temp_directory,
     }
 
+    # Check for existing uploads
+    segment_counter = get_segment_starting_point(args)
+    args["segment_counter"] = segment_counter
+
     # Prompt user to proceed with modified arguments
     get_user_confirmation(args)
 
@@ -89,6 +93,19 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
         os.path.join(args["temp_directory"], "manifest.json"), args)
 
     delete_directory(temp_directory)
+
+
+def get_segment_starting_point(args):
+    '''Return the segment_count where the upload should start based on
+    the existence of upload_cache. '''
+
+    try:
+        open(os.path.join(args["temp_directory"], "upload_cache"))
+
+        return update_segment_counter(args)
+
+    except IOError:
+        return 1
 
 
 def adjust_temp_directory(temp_directory):
@@ -139,22 +156,18 @@ def create_container(args, container_name):
 
 
 def create_segments(args):
-    '''Create segments of the file and create processes to upload them, delete
-    them and update the upload_cache file.'''
+    '''Create segments of the file starting at segment_counter. Create
+    processes to upload them, delete them and update the upload_cache file.'''
 
-    segment_counter = 1  # Counter for segments created.
+    segment_counter = args["segment_counter"]  # Counter for segments created.
 
     # Progress bar for segments uploaded.
     with click.progressbar(length=args["total_segments"],
                            label="Processing segments") as bar:
 
-        # Check if upload_cache exists:
-        try:
-            open(os.path.join(args["temp_directory"], "upload_cache"))
-            segment_counter = update_segment_counter(args["segment_size"])
+        # If not creating segments from the beginning, update the progress bar
+        if segment_counter > 1:
             bar.update(segment_counter)
-        except IOError:
-            pass
 
         # Check for temp directory, create it if it doens't exist.
         if not os.path.isdir(args["temp_directory"]):
@@ -200,7 +213,11 @@ def get_user_confirmation(args):
     to continue. Otherwise exit.'''
 
     click.echo("Please review the following before continuing:")
-    click.echo("       segments created: {0}".format(args["total_segments"]))
+
+    # Offset segment_counter by one because segment_counter reflects the
+    # segment to create not created.
+    click.echo("       segments created: {0}/{1}".format(
+        args["segment_counter"] - 1, args["total_segments"]))
     click.echo("          segments size: {0}MB".format(args["segment_size"]))
     click.echo("   concurrent processes: {0}".format(
         args["concurrent_processes"]))
@@ -235,7 +252,7 @@ def check_segment_size(filename, segment_size):
     return (file_size, total_segments, segment_size)
 
 
-def update_segment_counter(segment_size):
+def update_segment_counter(args):
     '''Find the last sequential segment name from upload_cache. Return
     the next sequential segment number.'''
 
