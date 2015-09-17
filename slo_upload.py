@@ -452,7 +452,8 @@ def create_manifest_file(filename, args):
         # Read lines from upload_cache
         cache = open(os.path.join(args["temp_directory"], 'upload_cache'), "r")
         for line in cache:
-            manifest.append(create_manifest_entry(line, args["container"]))
+            manifest.append(
+                create_manifest_entry(line, args["segment_container"]))
 
         manifest = sorted(manifest, key=lambda k: k['name'])
 
