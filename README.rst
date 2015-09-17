@@ -20,6 +20,8 @@ Installing
 For now, git clone::
 
     git clone https://github.com/OLRC/SwiftSLOUploader.git
+    cd SwiftSLOUploader
+    sudo python setup.py install
 
 *******************
 Basic Usage
@@ -27,7 +29,7 @@ Basic Usage
 
 1. Run the following command in the repo after downloading the repo ::
 
-    $ python slo_upload.py --filename path/to/file --container yourcontainer --auth_token yourauthtoken --storage_url https://olrc.scholarsportal.info:8080/v1/AUTH_yourstorageurl
+    $ swiftslouploader --filename path/to/file --container yourcontainer --auth_token yourauthtoken --storage_url https://olrc.scholarsportal.info:8080/v1/AUTH_yourstorageurl
 
 Run the following to get your storage_url and auth_token ::
 
