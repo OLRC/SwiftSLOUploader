@@ -364,15 +364,32 @@ def validate_credentials(storage_url, auth_token, container):
                            " --auth_token.")
                 exit(0)
 
-    # Check credentials against the given container
+    # Check credentials
     try:
-        swiftclient.client.head_container(storage_url, auth_token,
-                                          container)
+        swiftclient.client.head_account(storage_url, auth_token)
     except:
         click.echo("Invalid authentication information. Check that your"
                    " storage_url is correct or do a swift stat to get a new"
                    " auth token")
         exit(0)
+
+    # Check credentials against the given container
+    try:
+        swiftclient.client.head_container(storage_url, auth_token,
+                                          container)
+    except:
+        click.echo("Container does not exist.")
+        confirmation = click.prompt(
+            "Do you wish to create container {0}? (yes/no)".format(container))
+        while not (confirmation == "no" or confirmation == "yes"):
+            confirmation = click.prompt(
+                "Do you wish to create container {0}?".format(container))
+        if confirmation == "yes":
+            create_container(
+                {"storage_url": storage_url, "auth_token": auth_token},
+                container)
+        else:
+            exit(0)
 
     return (auth_token, storage_url)
 
