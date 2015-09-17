@@ -67,7 +67,7 @@ def slo_upload(filename, segment_size, container, auth_token, storage_url,
         "temp_directory": temp_directory,
     }
 
-    # Check for existing uploads
+    # Check for existing upload_cache
     segment_counter = get_segment_starting_point(args)
     args["segment_counter"] = segment_counter
 
@@ -208,9 +208,61 @@ def join_processes(processes):
         p.join()
 
 
+def get_filename(args):
+    '''Open the cache and return the name of the file.'''
+
+    cache = open(os.path.join(args["temp_directory"], 'upload_cache'), "r")
+    for line in cache:
+        return line.split(":")[1].rsplit("/", 1)[-2].rsplit("_", 1)[0]
+
+
+def get_segment_size(args):
+    '''Assuming a upload_cache exists, return the segment size as in int in
+    MB'''
+
+    cache = open(os.path.join(args["temp_directory"], 'upload_cache'), "r")
+    for line in cache:
+        return int(line.split(":")[3]) / 1048576
+
+
 def get_user_confirmation(args):
     '''Prompt user with current variables and prompt the user with confirmation
     to continue. Otherwise exit.'''
+
+    # Confirm continuation of upload
+    if args["segment_counter"] > 1:
+        click.echo("An incomplete upload has been detected.")
+
+        filename = get_filename(args)
+
+        # If current upload does not match the cache, clear the cache.
+        if filename != args["filename"].rsplit("/", 1)[-1]:
+            delete_directory(args["temp_directory"])
+        else:
+            percentage_complete = (
+                (float(args["segment_counter"])
+                    / float(args["total_segments"])) * 100)
+
+            confirmation = click.prompt(
+                "Do you wish to continue upload {0} at {1}% ? (yes/no)".format(
+                    filename, percentage_complete))
+            while not (confirmation == "no" or confirmation == "yes"):
+                confirmation = click.prompt(
+                    "Do you wish to continue upload {0}? ({1})".format(
+                        filename, percentage_complete))
+
+            if confirmation == "no":
+                delete_directory(args["temp_directory"])
+                args["segment_counter"] = 1
+                click.echo("Clearing cache. Starting new upload.\n")
+            else:
+
+                # Confirm segment size is the same as previous upload.
+                segment_size = get_segment_size(args)
+                if args["segment_size"] != segment_size:
+                    click.echo("Continuing upload with former segment_size"
+                               " {0}MB.".format(segment_size))
+                    args["segment_size"] = segment_size
 
     click.echo("Please review the following before continuing:")
 
