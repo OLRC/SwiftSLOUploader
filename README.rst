@@ -29,7 +29,7 @@ Basic Usage
 
 1. Run the following command in the repo after downloading the repo ::
 
-    $ swiftslouploader --filename path/to/file --container yourcontainer --auth_token yourauthtoken --storage_url https://olrc.scholarsportal.info:8080/v1/AUTH_yourstorageurl
+    $ swiftslouploader path/to/file yourcontainer --auth_token yourauthtoken --storage_url https://olrc.scholarsportal.info:8080/v1/AUTH_yourstorageurl
 
 Run the following to get your storage_url and auth_token ::
 
@@ -47,12 +47,10 @@ Options
 ::
 
 	$ python slo_upload.py --help
- 	$ --filename TEXT         File to be uploaded.  [required]
  	$ --segment_size INTEGER  Size of segments the file will be divided into in
  	$                         megabytes. Default and minimum is 1MB
- 	$ --container TEXT        Container to place the file.  [required]
- 	$ --auth_token TEXT       Swift auth token from swift stat.  [required]
- 	$ --storage_url TEXT      Storage url found from swift stat -v.  [required]
+ 	$ --auth_token TEXT       Swift auth token from swift stat.
+ 	$ --storage_url TEXT      Storage url found from swift stat -v.
  	$ --concurrent_processes  Number of concurrent processes used to upload segments. Default is 10
  	$ --max_disk_space        In MB, the max amount of disk space the script can use while creating segments. By default, the script will use as much space as required as determined by the segment_size and concurrent_processes
  	$ --max_disk_space        The directory used temporarily for the creation of segments. By default, a directory named temp is created. Warning: this directory will be deleted.

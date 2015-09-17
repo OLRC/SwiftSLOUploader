@@ -10,12 +10,11 @@ import shutil
 
 
 @click.command()
-@click.option('--filename', help='File to be uploaded.', required=True)
+@click.argument('filename')
+@click.argument('container')
 @click.option('--segment_size', default=1,
               help='Size of segments the file will be divided into in '
               'megabytes. Default and minimum is 1MB')
-@click.option('--container', help='Container to place the file.',
-              required=True)
 @click.option('--auth_token', help='Swift auth token from swift stat.')
 @click.option('--storage_url', help='Storage url found from swift stat -v.')
 @click.option('--concurrent_processes', default=10,
@@ -30,7 +29,7 @@ import shutil
               help='The directory used temporarily for the creation of'
               ' segments. By default, a directory named temp is created.'
               ' Warning: this directory will be deleted.')
-def slo_upload(filename, segment_size, container, auth_token, storage_url,
+def slo_upload(filename, container, segment_size, auth_token, storage_url,
                concurrent_processes, max_disk_space, temp_directory):
     """Given the swift credentials, upload the targeted file onto swift as a
     Static Large Object"""
