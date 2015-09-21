@@ -33,21 +33,27 @@ Basic Usage
 	$ export OS_TENANT_NAME=yourtenantname
 	$ export OS_AUTH_URL=yourcluserauthurl
 
-Alternatively, if you have an auth_token and the storage_url you can instead use the --auth_token and --storage_url options described below.
+Alternatively, if you have an auth_token and the storage_url you can instead use the auth_token and storage_url options described below.
 
 2. Run the following command ::
 
     $ swiftslouploader path/to/file yourcontainer
 
+
+Using options ::
+
+	$ swiftslouploader path/to/file yourcontainer --segment_size 5
+	$ swiftslouploader path/to/file yourcontainer --concurrent_processes 10
+
 **************
 Usage Notes
 **************
 
-This script creates 1MB segments of your file by default. You can increase the segment size with the --segment_size flag. However this requires a minimum of 10 X segment_size MB of storage space. The script creates segments and deletes them once they're uploaded but maintains a maximum of 10 segments at a time.
+This script creates 1MB segments of your file by default. You can increase the segment size with the segment_size option. However this requires a minimum of 10 X segment_size MB of storage space. The script creates segments and deletes them once they're uploaded but maintains a maximum of 10 segments at a time.
 
 This script also creates a container called "<container>_segments", where <container> is the specified container to store the file. This segments container is where the objects segments will be stored. The object will be accessible from the specified container.
 
-Swiftslouploader will create a directory called 'temp' in the current working directory. It will store segments and relevant files in it during the upload process and will delete the directory upon successful upload. Warning: if your current working directory has a temp folder, it will be deleted. Use the temp_directory option to specify another location for the temp directory to be created.
+Swiftslouploader will create a directory called 'temp' in the current working directory. It will store segments and relevant files in it during the upload process and will delete the directory upon successful upload. **Warning:** if your current working directory has a temp folder, it will be deleted. Use the temp_directory option to specify another location for the temp directory to be created.
 
 *******************
 Options
