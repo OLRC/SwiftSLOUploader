@@ -80,12 +80,12 @@ In order to speed up the creation and uploading of segments, by default swiftslo
 max_disk_space
 --------------
 
-By default, swiftbulkuploader uses (segment_size x concurrent_processes) in MB of disk space when creating segments. This can be restricted by passing in an int value in MB.
+By default, swiftslouploader uses (segment_size x concurrent_processes) in MB of disk space when creating segments. This can be restricted by passing in an int value in MB.
 
 temp_directory
 --------------
 
-Swiftbulkuploader uses the current working directory to create a directory called temp. This directory is used to create segments and relevant files and is then deleted. With this option, you can specify where this temporary directory is created.
+Swiftslouploader uses the current working directory to create a directory called temp. This directory is used to create segments and relevant files and is then deleted. With this option, you can specify where this temporary directory is created.
 
 **note:** If the directory passed in already contains a "temp" directory, it will be deleted.
 
