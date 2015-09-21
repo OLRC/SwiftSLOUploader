@@ -3,21 +3,21 @@ Swift SLO Uploader
 ===============================
 
 
-Swift SLO Uploader was created to upload really large files to Swift quickly using the SLO middleware (Static Large Object).
+Swift SLO Uploader was created to upload large files to `Swift <http://docs.openstack.org/developer/swift/>`_ quickly using the `SLO middleware (Static Large Object). <http://docs.openstack.org/developer/swift/middleware.html#slo-doc>`_ This is achieved by creating segments of the original file which are then uploaded concurrently. A manifest file, which is a mapping of all the segments, is uploaded once all the segments are created and used by Swift when users download the entire file in the future.
 
 *******************
 Requirements
 *******************
 
 * Python 2.7+
-* Python Click
-* Python SwiftClient
+* `Python Click <http://click.pocoo.org/5/>`_
+* `Python SwiftClient <https://github.com/openstack/python-swiftclient>`_
 
 *******************
 Installing
 *******************
 
-For now, git clone::
+ ::
 
     git clone https://github.com/OLRC/SwiftSLOUploader.git
     cd SwiftSLOUploader
@@ -35,7 +35,7 @@ Basic Usage
 
 Alternatively, if you have an auth_token and the storage_url you can instead use the --auth_token and --storage_url options described below.
 
-2. Run the following command in the repo after downloading the repo ::
+2. Run the following command ::
 
     $ swiftslouploader path/to/file yourcontainer
 
@@ -45,9 +45,9 @@ Usage Notes
 
 This script creates 1MB segments of your file by default. You can increase the segment size with the --segment_size flag. However this requires a minimum of 10 X segment_size MB of storage space. The script creates segments and deletes them once they're uploaded but maintains a maximum of 10 segments at a time.
 
-This script also creates a container called "--container"_segments to store segments while the actual file will be accessible from the specified --container.
+This script also creates a container called "<container>_segments", where <container> is the specified container to store the file. This segments container is where the objects segments will be stored. The object will be accessible from the specified container.
 
-Swiftslouploader will create a directory called 'temp' in the current working directory. It will store segments and relevant files in it and will delete it afterwards. If your current working directory has a temp folder, it will be deleted. Use the temp_directory option to specify another location for the temp directory to be created.
+Swiftslouploader will create a directory called 'temp' in the current working directory. It will store segments and relevant files in it during the upload process and will delete the directory upon successful upload. Warning: if your current working directory has a temp folder, it will be deleted. Use the temp_directory option to specify another location for the temp directory to be created.
 
 *******************
 Options
@@ -58,13 +58,12 @@ segment_size
 
 Size of segments the file will be divided into in MB. The default and minimum is 1MB.
 
-**note:** Swift SLO have a maximum number of segments of 1000. Due to this restriction, swiftslouploader will recalculate a larger segment size if required.
+**note:** Swift SLOs have a maximum number of segments of 1000. Due to this restriction, swiftslouploader will recalculate a larger segment size if required.
 
 auth_token
 ----------
 
 In lieu of setting environment variables, an auth_token along with storage_url can be passed in instead.
-
 
 storage_url
 -----------
@@ -74,25 +73,25 @@ In lieu of setting environment variables, storage_url along with an auth_token c
 concurrent_processes
 --------------------
 
-In order to speed up the creation and uploading of segments, by default swiftslouploader creates 10 processes that run currently. Use this option to set the number of concurrent processes used.
+In order to speed up the creation and uploading of segments, by default swiftslouploader creates 10 processes that run concurrently. Use this option to set the number of concurrent processes used.
 
 **note:** Increasing the number concurrent processes increases the amount of disk space swiftslouploader uses. If more disk space is required than is set by the max_disk_space option, the number of concurrent processes is recalculated to not exceed the maximum.
-
 
 max_disk_space
 --------------
 
-By default, swiftbulkuploader uses (segment_size x concurrent_processes) in MB of disk space when creating segments. This can be restricted by passing in a int value in MB.
-
+By default, swiftbulkuploader uses (segment_size x concurrent_processes) in MB of disk space when creating segments. This can be restricted by passing in an int value in MB.
 
 temp_directory
 --------------
 
-Swiftbulkuploader uses the current working directory to create a directory called temp. This directory is used to create segments and relevant files and then is deleted. With this option, you can specify where this temp directory is created.
+Swiftbulkuploader uses the current working directory to create a directory called temp. This directory is used to create segments and relevant files and is then deleted. With this option, you can specify where this temporary directory is created.
 
 **note:** If the directory passed in already contains a "temp" directory, it will be deleted.
 
-::
+summary
+-------
+ ::
 
 	$ python slo_upload.py --help
  	$ --segment_size INTEGER  Size of segments the file will be divided into in
@@ -103,5 +102,3 @@ Swiftbulkuploader uses the current working directory to create a directory calle
  	$ --max_disk_space        In MB, the max amount of disk space the script can use while creating segments. By default, the script will use as much space as required as determined by the segment_size and concurrent_processes
  	$ --temp_directory        The directory used temporarily for the creation of segments. By default, a directory named temp is created. Warning: this directory will be deleted.
  	$ --help                  Show this message and exit.
-
-
