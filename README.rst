@@ -49,7 +49,7 @@ Using options ::
 Usage Notes
 **************
 
-This script creates 1MB segments of your file by default. You can increase the segment size with the segment_size option. However this requires a minimum of 10 X segment_size MB of storage space. The script creates segments and deletes them once they're uploaded but maintains a maximum of 10 segments at a time.
+This script creates 1MB segments of your file by default. You can increase the segment size with the segment_size option. However this requires a minimum of segment_size MB of storage space. The script creates segments and deletes them once they're uploaded but maintains a maximum number of segments at a time as set by the concurrent_processes option (default is 1).
 
 This script also creates a container called "<container>_segments", where <container> is the specified container to store the file. This segments container is where the objects segments will be stored. The object will be accessible from the specified container.
 
@@ -79,7 +79,7 @@ In lieu of setting environment variables, storage_url along with an auth_token c
 concurrent_processes
 --------------------
 
-In order to speed up the creation and uploading of segments, by default swiftslouploader creates 10 processes that run concurrently. Use this option to set the number of concurrent processes used.
+In order to speed up the creation and uploading of segments, by default swiftslouploader creates 1 process that run concurrently. Use this option to set the number of concurrent processes used.
 
 **note:** Increasing the number concurrent processes increases the amount of disk space swiftslouploader uses. If more disk space is required than is set by the max_disk_space option, the number of concurrent processes is recalculated to not exceed the maximum.
 
@@ -104,7 +104,7 @@ summary
  	$                         megabytes. Default and minimum is 1MB
  	$ --auth_token TEXT       Swift auth token from swift stat.
  	$ --storage_url TEXT      Storage url found from swift stat -v.
- 	$ --concurrent_processes  Number of concurrent processes used to upload segments. Default is 10
+ 	$ --concurrent_processes  Number of concurrent processes used to upload segments. Default is 1
  	$ --max_disk_space        In MB, the max amount of disk space the script can use while creating segments. By default, the script will use as much space as required as determined by the segment_size and concurrent_processes
  	$ --temp_directory        The directory used temporarily for the creation of segments. By default, a directory named temp is created. Warning: this directory will be deleted.
  	$ --help                  Show this message and exit.

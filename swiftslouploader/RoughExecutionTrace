@@ -1,0 +1,55 @@
+slo upload {
+	validate_credentials {
+		swiftclient.client.get_auth()
+		swiftclient.client.head_account()
+		click.echo() + user response
+	}
+	check_segment_size {
+
+	}
+	update_concurrent_processes {}
+	adjust_temp_directory {}
+	get_segment_starting_point {
+		update_segment_counter {
+			open()
+		}
+	}
+	get_user_confirmation {
+		get_filename {
+			open()
+		}
+		click.echo() + user response
+	}
+	create_container {
+		swiftclient.client.head_container
+	}
+	create_segments {
+		click.bar()
+		Process() {
+			process_segment {
+				create_segment {
+					click.bar{}
+					open()
+				}
+				upload_segment {
+					open()
+					swiftlcient.put_object()
+				}
+				log_segment {
+					open()
+				}
+				delete_file {}
+			}
+		}
+
+	}
+	join_processes {}
+	create_manifest_file {
+		open()
+		create_manifest_entry {}
+	}
+	upload_manifest_file {
+		swiftclient.client.put_object
+	}
+	delete_directory {}
+}

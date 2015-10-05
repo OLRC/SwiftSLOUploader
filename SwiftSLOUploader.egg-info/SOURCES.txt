@@ -1,0 +1,14 @@
+CHANGES.txt
+LICENSE.txt
+MANIFEST.in
+README.rst
+setup.py
+SwiftSLOUploader.egg-info/PKG-INFO
+SwiftSLOUploader.egg-info/SOURCES.txt
+SwiftSLOUploader.egg-info/dependency_links.txt
+SwiftSLOUploader.egg-info/entry_points.txt
+SwiftSLOUploader.egg-info/pbr.json
+SwiftSLOUploader.egg-info/requires.txt
+SwiftSLOUploader.egg-info/top_level.txt
+swiftslouploader/__init__.py
+swiftslouploader/swiftslouploader.py

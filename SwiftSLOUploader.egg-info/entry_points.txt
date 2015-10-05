@@ -1,0 +1,3 @@
+[console_scripts]
+swiftslouploader = swiftslouploader.swiftslouploader:slo_upload
+
