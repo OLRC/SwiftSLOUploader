@@ -1,3 +1,6 @@
+SwiftSLOUploader.egg-info/*
+build/*
+dist/*
 0*
 manifest.json
 upload_cache
