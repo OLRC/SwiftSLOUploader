@@ -1,5 +1,5 @@
 import click
-from multiprocessing import Process, Lock
+from multiprocessing import Process, Lock, Queue
 import os
 import swiftclient
 import hashlib
@@ -160,48 +160,46 @@ def create_segments(args):
 
     segment_counter = args["segment_counter"]  # Counter for segments created.
 
-    # Progress bar for segments uploaded.
-    with click.progressbar(length=args["total_segments"],
-                           label="Processing segments") as bar:
+    queue = Queue()
 
-        # If not creating segments from the beginning, update the progress bar
-        if segment_counter > 1:
-            bar.update(segment_counter)
+    # Initiate the progress bar.
+    p = Process(target=update_progressbar,
+                args=(args, queue))
+    p.start()
 
-        # Check for temp directory, create it if it doens't exist.
-        if not os.path.isdir(args["temp_directory"]):
-            os.makedirs(args["temp_directory"])
+    # Check for temp directory, create it if it doens't exist.
+    if not os.path.isdir(args["temp_directory"]):
+        os.makedirs(args["temp_directory"])
 
-        # Stop loop when all segments are created
-        while segment_counter <= args["total_segments"]:
+    # Stop loop when all segments are created
+    while segment_counter <= args["total_segments"]:
 
-            # Control the maximum number of processes are active.
-            # This also restricts how much space is used up for segments.
-            while len(args["processes"]) >= args["concurrent_processes"]:
-                p = args["processes"].pop()
-                p.join()
+        # Control the maximum number of processes are active.
+        # This also restricts how much space is used up for segments.
+        while len(args["processes"]) >= args["concurrent_processes"]:
+            p = args["processes"].pop()
+            p.join()
 
-            segment_name = "{}".format("%04d" % segment_counter)
+        segment_name = "{}".format("%04d" % segment_counter)
 
-            # The location segments will be stored on swift is within a
-            # pseudo folder.
-            swift_destination = os.path.join(
-                args["filename"].split("/")[-1] + "_segments",
-                segment_name)
+        # The location segments will be stored on swift is within a
+        # pseudo folder.
+        swift_destination = os.path.join(
+            args["filename"].split("/")[-1] + "_segments",
+            segment_name)
 
-            # Craete, upload and delete the segment.
-            p = Process(target=process_segment,
-                        args=(args, segment_name, swift_destination))
-            p.start()
-            bar.update(1)
-            args["processes"] = [p] + args["processes"]
+        # Create, upload and delete the segment.
+        p = Process(target=process_segment,
+                    args=(args, segment_name, swift_destination, queue))
+        p.start()
+        args["processes"] = [p] + args["processes"]
 
-            segment_counter += 1
+        segment_counter += 1
 
 
 def join_processes(processes):
     '''Join all the processes in the list of processes.'''
-    click.echo("Wrapping up remaining uploads...")
+
     while len(processes) > 0:
         p = processes.pop()
         p.join()
@@ -394,7 +392,28 @@ def validate_credentials(storage_url, auth_token, container):
     return (auth_token, storage_url)
 
 
-def process_segment(args, segment_name, swift_destination):
+def update_progressbar(args, queue):
+    '''Create a click progress bar and update it as new information arrives
+    from the queue.'''
+
+    # Progress bar for segments uploaded.
+    with click.progressbar(length=args["total_segments"],
+                           label="Processing segments") as bar:
+        counter = args["segment_counter"]
+
+        # If not creating segments from the beginning, update the progress bar
+        if counter > 1:
+            bar.update(args["segment_counter"])
+
+        while counter <= args["total_segments"]:
+
+            if not queue.empty():
+                queue.get()
+                bar.update(1)
+                counter += 1
+
+
+def process_segment(args, segment_name, swift_destination, queue):
     '''Given a segment_name, create the segment, upload it and delete the
     file.'''
 
@@ -407,6 +426,8 @@ def process_segment(args, segment_name, swift_destination):
     log_segment(segment_name, swift_destination, args)
 
     delete_file(os.path.join(args["temp_directory"], segment_name))
+
+    queue.put(1)
 
     exit(0)
 
