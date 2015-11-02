@@ -12,20 +12,20 @@ import shutil
 @click.command()
 @click.argument('filename')
 @click.argument('container')
-@click.option('--segment_size', default=1,
+@click.option('--segment-size', default=1,
               help='Size of segments the file will be divided into in '
               'megabytes. Default and minimum is 1MB')
-@click.option('--auth_token', help='Swift auth token from swift stat.')
-@click.option('--storage_url', help='Storage url found from swift stat -v.')
-@click.option('--concurrent_processes', default=1,
+@click.option('--auth-token', help='Swift auth token from swift stat.')
+@click.option('--storage-url', help='Storage url found from swift stat -v.')
+@click.option('--concurrent-processes', default=1,
               help='Number of concurrent processes used to upload segments.'
               ' Default is 1')
-@click.option('--max_disk_space', default=0,
+@click.option('--max-disk-space', default=0,
               help='In MB, the max amount of disk space the script can use'
               ' while creating segments. By default, the script will use as'
               ' much space as required as determined by the segment_size and'
-              ' concurrent_processes')
-@click.option('--temp_directory',
+              ' concurrent-processes')
+@click.option('--temp-directory',
               help='The directory used temporarily for the creation of'
               ' segments. By default, a directory named temp is created.'
               ' Warning: this directory will be deleted.')
@@ -130,15 +130,15 @@ def update_concurrent_processes(concurrent_processes, segment_size,
 
         if total_disk_space_used > max_disk_space * 1048576:
             click.echo(
-                "Unable to use {0} as concurrent_processes due to {1} "
-                "max_disk_space limit".format(
+                "Unable to use {0} as concurrent-processes due to {1} "
+                "max-disk-space limit".format(
                     concurrent_processes, max_disk_space))
             concurrent_processes = max_disk_space / (segment_size)
 
     # Not possible to stay within minimum disk space
     if not concurrent_processes:
         click.echo(
-            "Unable to perform upload with {0}MB max_disk_space. "
+            "Unable to perform upload with {0}MB max-disk-space. "
             "Minimum disk space required is {1}MB".format(
                 max_disk_space, segment_size))
         concurrent_processes = 1
@@ -240,26 +240,20 @@ def get_user_confirmation(args):
                 (float(args["segment_counter"])
                     / float(args["total_segments"])) * 100)
 
-            confirmation = click.prompt(
-                "Do you wish to continue upload {0} at {1}% ? (yes/no)".format(
-                    filename, percentage_complete))
-            while not (confirmation == "no" or confirmation == "yes"):
-                confirmation = click.prompt(
-                    "Do you wish to continue upload {0}? ({1})".format(
-                        filename, percentage_complete))
+            if click.confirm("Do you wish to continue upload {0} at {1}%?".format(
+                    filename, percentage_complete)):
 
-            if confirmation == "no":
-                delete_directory(args["temp_directory"])
-                args["segment_counter"] = 1
-                click.echo("Clearing cache. Starting new upload.\n")
-            else:
-
-                # Confirm segment size is the same as previous upload.
+                 # Confirm segment size is the same as previous upload.
                 segment_size = get_segment_size(args)
                 if args["segment_size"] != segment_size:
                     click.echo("Continuing upload with former segment_size"
                                " {0}MB.".format(segment_size))
                     args["segment_size"] = segment_size
+
+            else:
+                delete_directory(args["temp_directory"])
+                args["segment_counter"] = 1
+                click.echo("Clearing cache. Starting new upload.\n")                
 
     click.echo("Please review the following before continuing:")
 
@@ -272,14 +266,8 @@ def get_user_confirmation(args):
         args["concurrent_processes"]))
     click.echo("        disk space used: {0}MB".format(
         args["segment_size"] * args["concurrent_processes"]))
-    confirmation = click.prompt("Do you wish to proceed? Enter yes or no")
-    while not (confirmation == "no" or confirmation == "yes"):
-        confirmation = click.prompt("Do you wish to proceed? Enter yes or no")
-    if confirmation == "no":
-        click.echo("Exiting.")
-        exit(0)
-    click.echo("Starting up load ...")
 
+    click.confirm("Do you wish to proceed?", abort=True)
 
 def check_segment_size(filename, segment_size):
     '''Check the given file can be segmented within less than or equal to 1000
@@ -341,7 +329,7 @@ def validate_credentials(storage_url, auth_token, container):
                 not os.environ.get("OS_TENANT_NAME")):
 
             # Exit if variables are not set.
-            click.echo("Please pass in --storage_url and --auth_token or make"
+            click.echo("Please pass in --storage-url and --auth-token or make"
                        " sure $OS_USERNAME, $OS_PASSWORD, $OS_TENANT_NAME,"
                        " $OS_AUTH_URL are set in your environment variables.")
             exit(0)
@@ -358,8 +346,8 @@ def validate_credentials(storage_url, auth_token, container):
                 click.echo("Failed to authenticate. Please check that your"
                            " environment variables $OS_USERNAME, $OS_PASSWORD,"
                            " $OS_AUTH_URL and $OS_TENANT_NAME are correct."
-                           " Alternatively, pass in --storage_url and"
-                           " --auth_token.")
+                           " Alternatively, pass in --storage-url and"
+                           " --auth-token.")
                 exit(0)
 
     # Check credentials
@@ -367,7 +355,7 @@ def validate_credentials(storage_url, auth_token, container):
         swiftclient.client.head_account(storage_url, auth_token)
     except:
         click.echo("Invalid authentication information. Check that your"
-                   " storage_url is correct or do a swift stat to get a new"
+                   " storage-url is correct or do a swift stat to get a new"
                    " auth token")
         exit(0)
 
@@ -377,17 +365,13 @@ def validate_credentials(storage_url, auth_token, container):
                                           container)
     except:
         click.echo("Container does not exist.")
-        confirmation = click.prompt(
-            "Do you wish to create container {0}? (yes/no)".format(container))
-        while not (confirmation == "no" or confirmation == "yes"):
-            confirmation = click.prompt(
-                "Do you wish to create container {0}?".format(container))
-        if confirmation == "yes":
-            create_container(
-                {"storage_url": storage_url, "auth_token": auth_token},
-                container)
-        else:
-            exit(0)
+
+        if click.confirm("Do you wish to create container {0}?".format(
+                          container), abort=True):
+
+            create_container({"storage_url": storage_url, 
+                              "auth_token": auth_token},
+                             container)
 
     return (auth_token, storage_url)
 
